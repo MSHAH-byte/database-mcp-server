@@ -7,51 +7,60 @@ This project was built to understand how **MCP servers expose capabilities to AI
 ## Features
 
 * Inspect database schema dynamically
-* List tables, columns, and foreign-key relationships
+* List tables, columns, data types, primary keys, and foreign-key relationships
 * Execute **read-only `SELECT` queries**
 * Return structured query results
 * Record query execution time
-* Inspect recently executed queries
+* Inspect recorded queries and filter slow queries
+* Expose MCP tool metadata and annotations
 * MCP communication over **stdio**
 * Built with the official Python MCP SDK
+* Automated tests using `pytest`
 
 ## Architecture
 
 ```text
                     MCP Client
-              (MCP Inspector / Claude)
-                       │
-                       │ MCP / stdio
-                       ▼
-                ┌─────────────┐
-                │  server.py  │
-                │ MCP Server  │
-                └──────┬──────┘
-                       │
-                  MCP Tools
-                       │
-                       ▼
-                ┌─────────────┐
-                │  tools.py   │
-                │             │
-                │ • Schema    │
-                │ • SQL       │
-                │ • Monitoring│
-                └──────┬──────┘
-                       │
-                 Database Logic
-                       │
-                       ▼
-                ┌─────────────┐
-                │    db.py    │
-                └──────┬──────┘
-                       │
-                       ▼
-                ┌─────────────┐
-                │  SQLite DB  │
-                │   app.db    │
-                └─────────────┘
+               (MCP Inspector / Claude)
+                         │
+                         │ MCP / stdio
+                         ▼
+                 ┌─────────────┐
+                 │  server.py  │
+                 │ MCP Server  │
+                 └──────┬──────┘
+                        │
+                    MCP Tools
+                        │
+                        ▼
+                 ┌─────────────┐
+                 │  tools.py   │
+                 │             │
+                 │ • Schema    │
+                 │ • SQL       │
+                 │ • Monitoring│
+                 └──────┬──────┘
+                        │
+                  Database Logic
+                        │
+                        ▼
+                 ┌─────────────┐
+                 │    db.py    │
+                 └──────┬──────┘
+                        │
+                        ▼
+                 ┌─────────────┐
+                 │  SQLite DB  │
+                 │   app.db    │
+                 └─────────────┘
 ```
+
+The project separates the MCP server layer from the database and tool logic:
+
+* `server.py` registers MCP tools and exposes them through stdio.
+* `tools.py` contains the database capabilities exposed through MCP.
+* `db.py` handles SQLite connections, initialization, and schema inspection.
+* `tests/` contains automated tests for the tool layer.
 
 ## MCP Tools
 
@@ -99,12 +108,14 @@ JOIN orders ON users.id = orders.user_id;
 
 The tool returns:
 
-* Query success/failure
+* Query success or failure
 * Rows
 * Row count
 * Execution time
 
 Write operations such as `INSERT`, `UPDATE`, and `DELETE` are rejected.
+
+The tool also rejects multiple SQL statements in a single request.
 
 ### `get_slow_queries`
 
@@ -118,19 +129,32 @@ Queries can be filtered by minimum execution time and limited by result count.
 
 > Query history is stored in memory and is reset when the MCP server restarts. This is intentional for this learning project.
 
+## Tool Annotations
+
+The MCP tools include tool annotations describing their intended behavior.
+
+The database tools are marked as:
+
+* **Read-only** where applicable
+* **Non-destructive**
+* **Idempotent** where applicable
+* **Closed-world** operations that do not require access to external systems
+
+These annotations provide MCP clients with additional metadata about the behavior and safety characteristics of the tools.
+
 ## Database
 
 The project uses a small SQLite database containing two related tables:
 
 ```text
 users
------
+
 id
 name
 email
 
 orders
-------
+
 id
 user_id
 product
@@ -152,6 +176,7 @@ Sample data is included automatically when the database is initialized.
 
 ```text
 Database_MCP_Server/
+
 │
 ├── database/
 │   └── app.db
@@ -160,6 +185,9 @@ Database_MCP_Server/
 │   ├── db.py
 │   ├── tools.py
 │   └── server.py
+│
+├── tests/
+│   └── test_tools.py
 │
 ├── .gitignore
 ├── LICENSE
@@ -172,31 +200,49 @@ Database_MCP_Server/
 Handles SQLite database operations:
 
 * Database initialization
-* Connections
+* SQLite connections
 * Table discovery
 * Column inspection
 * Foreign-key inspection
-* SQL execution
 
 ### `src/tools.py`
 
-Contains the actual capabilities exposed through MCP:
+Contains the capabilities exposed through MCP:
 
 * Database schema inspection
 * Read-only SQL execution
 * Query performance logging
+* Slow-query filtering
 
 ### `src/server.py`
 
 Creates the MCP server and exposes the Python functions as MCP tools.
 
-The server communicates using **stdio transport**.
+The server:
+
+* Registers the three MCP tools
+* Defines tool descriptions
+* Defines tool annotations
+* Communicates using **stdio transport**
+
+### `tests/test_tools.py`
+
+Contains automated tests for the database tool layer.
+
+The tests cover:
+
+* Database schema inspection
+* Successful read-only SQL execution
+* Rejection of non-`SELECT` queries
+* Slow-query filtering and ordering
+* Slow-query result limits
 
 ## Requirements
 
 * Python 3.12+
 * Node.js / npm
 * MCP Python SDK 2.x
+* pytest
 
 ## Installation
 
@@ -226,7 +272,7 @@ Activate it on Windows PowerShell:
 
 Install dependencies:
 
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
@@ -274,7 +320,9 @@ You can then test:
 
 ```text
 get_database_schema
+
 execute_read_only_query
+
 get_slow_queries
 ```
 
@@ -310,6 +358,26 @@ DELETE FROM users;
 
 returns an error because the server only permits `SELECT` queries.
 
+## Automated Tests
+
+The project includes automated tests using `pytest`.
+
+Because the source files are located in the `src/` directory, set `PYTHONPATH` to `src` before running the tests.
+
+On Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+```
+
+Then run:
+
+```powershell
+pytest
+```
+
+The current test suite covers the core database tools and verifies the expected behavior of the read-only SQL restrictions and query monitoring functionality.
+
 ## Security Considerations
 
 This project intentionally exposes a limited database capability.
@@ -334,9 +402,13 @@ Without MCP:
 
 ```text
 AI Application
+
       │
+
       └── custom integration
+
               │
+
               └── database
 ```
 
@@ -344,19 +416,23 @@ With MCP:
 
 ```text
 AI Application
+
       │
       ▼
-   MCP Client
+  MCP Client
+
       │
       │ MCP
       ▼
   MCP Server
+
       │
       ▼
     Tools
+
       │
       ▼
-  Database
+   Database
 ```
 
 The MCP client can discover the capabilities exposed by the server through the protocol instead of requiring the database integration to be hard-coded into every AI application.
@@ -369,10 +445,12 @@ The MCP client can discover the capabilities exposed by the server through the p
 * Tool registration
 * Tool discovery
 * Tool descriptions and schemas
+* Tool annotations
 * Tool invocation
 * Structured tool results
 * Separating MCP tools from application logic
 * Restricting tool permissions
+* Automated testing
 * Connecting AI applications to external capabilities
 
 ## Limitations
@@ -392,7 +470,7 @@ These limitations keep the project focused on learning the core MCP concepts.
 
 ## Next Step
 
-The next MCP project will extend these concepts into a **multi-server DevOps / Incident Response system**, where an AI agent interacts with multiple independent MCP servers for system logs and GitHub operations, with human approval before side-effecting actions.
+The next MCP project extends these concepts into a **multi-server DevOps / Incident Response system**, where an AI agent interacts with multiple independent MCP servers for system logs and GitHub operations, with human approval before side-effecting actions.
 
 ## License
 
