@@ -1,5 +1,11 @@
 # Database MCP Server
 
+# Database MCP Server
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/mshah-byte-database-mcp-server-3lfylr?v=90e2c6fd7a4566838fe38800ca304e72)](https://m8ven.ai/mcp/mshah-byte-database-mcp-server-3lfylr?s=readme)
+
+A Python-based **Model Context Protocol (MCP) server**...
+
 A Python-based **Model Context Protocol (MCP) server** that exposes a SQLite database to MCP clients through structured tools for database inspection, read-only SQL execution, and query performance monitoring.
 
 This project was built to understand how **MCP servers expose capabilities to AI applications** through the MCP protocol.
